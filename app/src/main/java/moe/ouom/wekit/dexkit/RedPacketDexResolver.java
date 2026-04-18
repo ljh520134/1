@@ -1,11 +1,8 @@
 package moe.ouom.wekit.dexkit;
 
 import org.luckypray.dexkit.DexKitBridge;
-import org.luckypray.dexkit.query.FindClass;
 import org.luckypray.dexkit.query.FindMethod;
-import org.luckypray.dexkit.query.matchers.ClassMatcher;
 import org.luckypray.dexkit.query.matchers.MethodMatcher;
-import org.luckypray.dexkit.result.ClassData;
 import org.luckypray.dexkit.result.MethodData;
 
 import java.lang.reflect.Modifier;
@@ -19,56 +16,54 @@ public class RedPacketDexResolver {
 
         try (DexKitBridge bridge = DexKitBridge.create(apkPath)) {
 
-            // ReceiveLuckyMoney ctor
+            // 1) ReceiveLuckyMoney ctor
             MethodMatcher mmReceive = new MethodMatcher();
             mmReceive.name("<init>");
             mmReceive.usingStrings("MicroMsg.NetSceneReceiveLuckyMoney");
-
             MethodData receiveCtor = bridge.findMethod(
                     FindMethod.create().matcher(mmReceive)
             ).single();
 
-            // OpenLuckyMoney ctor
+            // 2) OpenLuckyMoney ctor
             MethodMatcher mmOpen = new MethodMatcher();
             mmOpen.name("<init>");
             mmOpen.usingStrings("MicroMsg.NetSceneOpenLuckyMoney");
-
             MethodData openCtor = bridge.findMethod(
                     FindMethod.create().matcher(mmOpen)
             ).single();
 
             String receiveCtorDesc = receiveCtor.getDescriptor();
             String openCtorDesc = openCtor.getDescriptor();
-
             String receiveClsDesc = receiveCtorDesc.substring(0, receiveCtorDesc.indexOf("->"));
             String openClsDesc = openCtorDesc.substring(0, openCtorDesc.indexOf("->"));
 
-            // onGYNetEnd
+            // 3) onGYNetEnd in receive class
             MethodMatcher mmOnGy = new MethodMatcher();
             mmOnGy.declaredClass(receiveClsDesc);
             mmOnGy.name("onGYNetEnd");
             mmOnGy.paramCount(3);
-
             MethodData onGy = bridge.findMethod(
                     FindMethod.create().matcher(mmOnGy)
             ).single();
 
-            // queue class
-            ClassMatcher cmQueue = new ClassMatcher();
-            cmQueue.methods(ms -> ms.add(m -> {
-                m.paramCount(4);
-                m.usingStrings("MicroMsg.Mvvm.NetSceneObserverOwner");
-            }));
+            // 4) 先找任意 static/no-arg 方法 + 包含 "MicroMsg.Mvvm.NetSceneObserverOwner"
+            //    再从结果里选 returnType 一样的方法作为 queue_getter
+            MethodMatcher mmAnyStatic = new MethodMatcher();
+            mmAnyStatic.modifiers(Modifier.STATIC);
+            mmAnyStatic.paramCount(0);
+            mmAnyStatic.usingStrings("MicroMsg.Mvvm.NetSceneObserverOwner");
 
-            ClassData queueClass = bridge.findClass(
-                    FindClass.create().matcher(cmQueue)
+            MethodData anyStatic = bridge.findMethod(
+                    FindMethod.create().matcher(mmAnyStatic)
             ).single();
 
-            // queue getter
+            String queueType = anyStatic.getMethodInstance(classLoader).getReturnType().getName();
+
+            // 5) queue getter: static + no-arg + return queueType
             MethodMatcher mmGetter = new MethodMatcher();
             mmGetter.modifiers(Modifier.STATIC);
             mmGetter.paramCount(0);
-            mmGetter.returnType(queueClass.getName());
+            mmGetter.returnType(queueType);
 
             MethodData queueGetter = bridge.findMethod(
                     FindMethod.create().matcher(mmGetter)
