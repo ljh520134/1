@@ -21,28 +21,38 @@ jobs:
       - name: Build debug
         run: gradle :app:assembleDebug
 
-      - name: Locate input for D8
+      - name: Prepare D8 input jar
+        shell: bash
         run: |
-          # 先找 classes.jar
-          JAR_PATH=$(find app/build -type f -name "classes.jar" | head -n 1)
-          # 找不到就回退用 compileDebugJavaWithJavac 输出目录
+          set -e
+          mkdir -p outDex
+
+          # 1) 优先找 classes.jar
+          JAR_PATH=$(find app/build -type f -name "classes.jar" | head -n 1 || true)
+
+          # 2) 找不到则把 javac 输出目录打成 jar
           if [ -z "$JAR_PATH" ]; then
-            JAR_PATH="app/build/intermediates/javac/debug/classes"
+            CLASS_DIR="app/build/intermediates/javac/debug/classes"
+            if [ ! -d "$CLASS_DIR" ]; then
+              echo "Class dir not found: $CLASS_DIR"
+              echo "---- debug paths ----"
+              find app/build -maxdepth 8 -type d | head -n 300
+              exit 1
+            fi
+            (cd "$CLASS_DIR" && jar cf /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/outDex/input.jar .)
+            JAR_PATH="/home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/outDex/input.jar"
           fi
 
-          echo "JAR_PATH=$JAR_PATH" >> $GITHUB_ENV
-          echo "Using input: $JAR_PATH"
-
-          if [ ! -e "$JAR_PATH" ]; then
-            echo "Input not found: $JAR_PATH"
-            find app/build -maxdepth 6 -type f | head -n 200
-            exit 1
-          fi
+          echo "Using D8 input: $JAR_PATH"
+          ls -la "$JAR_PATH"
+          echo "JAR_PATH=$JAR_PATH" >> "$GITHUB_ENV"
 
       - name: D8 to dex
+        shell: bash
         run: |
+          set -e
           mkdir -p outDex
-          $ANDROID_HOME/build-tools/34.0.0/d8 "$JAR_PATH" --output outDex
+          "$ANDROID_HOME/build-tools/34.0.0/d8" "$JAR_PATH" --output outDex
           ls -la outDex
 
       - name: Rename dex
