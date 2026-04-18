@@ -21,18 +21,34 @@ jobs:
       - name: Build debug
         run: gradle :app:assembleDebug
 
-      - name: Find classes.jar
+      - name: Locate input for D8
         run: |
-          JAR_PATH=$(find app/build -name "classes.jar" | head -n 1)
+          # 先找 classes.jar
+          JAR_PATH=$(find app/build -type f -name "classes.jar" | head -n 1)
+          # 找不到就回退用 compileDebugJavaWithJavac 输出目录
+          if [ -z "$JAR_PATH" ]; then
+            JAR_PATH="app/build/intermediates/javac/debug/classes"
+          fi
+
           echo "JAR_PATH=$JAR_PATH" >> $GITHUB_ENV
-          echo "Found classes.jar: $JAR_PATH"
+          echo "Using input: $JAR_PATH"
+
+          if [ ! -e "$JAR_PATH" ]; then
+            echo "Input not found: $JAR_PATH"
+            find app/build -maxdepth 6 -type f | head -n 200
+            exit 1
+          fi
 
       - name: D8 to dex
         run: |
+          mkdir -p outDex
           $ANDROID_HOME/build-tools/34.0.0/d8 "$JAR_PATH" --output outDex
+          ls -la outDex
 
-      - name: Rename
-        run: cp outDex/classes.dex dexkit-helper.dex
+      - name: Rename dex
+        run: |
+          cp outDex/classes.dex dexkit-helper.dex
+          ls -la dexkit-helper.dex
 
       - uses: actions/upload-artifact@v4
         with:
