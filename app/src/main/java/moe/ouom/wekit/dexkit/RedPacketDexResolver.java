@@ -3,6 +3,8 @@ package moe.ouom.wekit.dexkit;
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindClass;
 import org.luckypray.dexkit.query.FindMethod;
+import org.luckypray.dexkit.query.matchers.ClassMatcher;
+import org.luckypray.dexkit.query.matchers.MethodMatcher;
 import org.luckypray.dexkit.result.ClassData;
 import org.luckypray.dexkit.result.MethodData;
 
@@ -16,18 +18,23 @@ public class RedPacketDexResolver {
         Map<String, String> out = new HashMap<>();
 
         try (DexKitBridge bridge = DexKitBridge.create(apkPath)) {
-            // 1) ReceiveLuckyMoney 构造
+
+            // ReceiveLuckyMoney ctor
+            MethodMatcher mmReceive = new MethodMatcher();
+            mmReceive.name("<init>");
+            mmReceive.usingStrings("MicroMsg.NetSceneReceiveLuckyMoney");
+
             MethodData receiveCtor = bridge.findMethod(
-                    FindMethod.create().matcher(m -> m
-                            .name("<init>")
-                            .usingStrings("MicroMsg.NetSceneReceiveLuckyMoney"))
+                    FindMethod.create().matcher(mmReceive)
             ).single();
 
-            // 2) OpenLuckyMoney 构造
+            // OpenLuckyMoney ctor
+            MethodMatcher mmOpen = new MethodMatcher();
+            mmOpen.name("<init>");
+            mmOpen.usingStrings("MicroMsg.NetSceneOpenLuckyMoney");
+
             MethodData openCtor = bridge.findMethod(
-                    FindMethod.create().matcher(m -> m
-                            .name("<init>")
-                            .usingStrings("MicroMsg.NetSceneOpenLuckyMoney"))
+                    FindMethod.create().matcher(mmOpen)
             ).single();
 
             String receiveCtorDesc = receiveCtor.getDescriptor();
@@ -36,27 +43,35 @@ public class RedPacketDexResolver {
             String receiveClsDesc = receiveCtorDesc.substring(0, receiveCtorDesc.indexOf("->"));
             String openClsDesc = openCtorDesc.substring(0, openCtorDesc.indexOf("->"));
 
-            // 3) onGYNetEnd
+            // onGYNetEnd
+            MethodMatcher mmOnGy = new MethodMatcher();
+            mmOnGy.declaredClass(receiveClsDesc);
+            mmOnGy.name("onGYNetEnd");
+            mmOnGy.paramCount(3);
+
             MethodData onGy = bridge.findMethod(
-                    FindMethod.create().matcher(m -> m
-                            .declaredClass(receiveClsDesc)
-                            .name("onGYNetEnd")
-                            .paramCount(3))
+                    FindMethod.create().matcher(mmOnGy)
             ).single();
 
-            // 4) NetSceneQueue 类
+            // queue class
+            ClassMatcher cmQueue = new ClassMatcher();
+            cmQueue.methods(ms -> ms.add(m -> {
+                m.paramCount(4);
+                m.usingStrings("MicroMsg.Mvvm.NetSceneObserverOwner");
+            }));
+
             ClassData queueClass = bridge.findClass(
-                    FindClass.create().matcher(c -> c.methods(ms -> ms.add(mm -> mm
-                            .paramCount(4)
-                            .usingStrings("MicroMsg.Mvvm.NetSceneObserverOwner"))))
+                    FindClass.create().matcher(cmQueue)
             ).single();
 
-            // 5) queue getter
+            // queue getter
+            MethodMatcher mmGetter = new MethodMatcher();
+            mmGetter.modifiers(Modifier.STATIC);
+            mmGetter.paramCount(0);
+            mmGetter.returnType(queueClass.getName());
+
             MethodData queueGetter = bridge.findMethod(
-                    FindMethod.create().matcher(m -> m
-                            .modifiers(Modifier.STATIC)
-                            .paramCount(0)
-                            .returnType(queueClass.getName()))
+                    FindMethod.create().matcher(mmGetter)
             ).single();
 
             out.put("receive_cls", receiveClsDesc);
