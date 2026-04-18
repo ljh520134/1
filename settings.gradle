@@ -1,0 +1,2 @@
+rootProject.name = "dexkit-helper"
+include ':app'
