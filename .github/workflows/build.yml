@@ -18,46 +18,22 @@ jobs:
         with:
           gradle-version: 8.2.1
 
-      - name: Build debug
+      - name: Build debug APK
         run: gradle :app:assembleDebug
 
-      - name: Prepare D8 input jar
-        shell: bash
+      - name: Extract classes.dex from APK (most stable)
         run: |
-          set -e
-          mkdir -p outDex
-
-          # 1) 优先找 classes.jar
-          JAR_PATH=$(find app/build -type f -name "classes.jar" | head -n 1 || true)
-
-          # 2) 找不到则把 javac 输出目录打成 jar
-          if [ -z "$JAR_PATH" ]; then
-            CLASS_DIR="app/build/intermediates/javac/debug/classes"
-            if [ ! -d "$CLASS_DIR" ]; then
-              echo "Class dir not found: $CLASS_DIR"
-              echo "---- debug paths ----"
-              find app/build -maxdepth 8 -type d | head -n 300
-              exit 1
-            fi
-            (cd "$CLASS_DIR" && jar cf /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/outDex/input.jar .)
-            JAR_PATH="/home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/outDex/input.jar"
+          APK_PATH=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          echo "APK_PATH=$APK_PATH"
+          if [ -z "$APK_PATH" ]; then
+            echo "APK not found"
+            find app/build -maxdepth 8 -type f | head -n 200
+            exit 1
           fi
 
-          echo "Using D8 input: $JAR_PATH"
-          ls -la "$JAR_PATH"
-          echo "JAR_PATH=$JAR_PATH" >> "$GITHUB_ENV"
-
-      - name: D8 to dex
-        shell: bash
-        run: |
-          set -e
-          mkdir -p outDex
-          "$ANDROID_HOME/build-tools/34.0.0/d8" "$JAR_PATH" --output outDex
-          ls -la outDex
-
-      - name: Rename dex
-        run: |
-          cp outDex/classes.dex dexkit-helper.dex
+          mkdir -p outDexRaw
+          unzip -o "$APK_PATH" "classes.dex" -d outDexRaw
+          cp outDexRaw/classes.dex dexkit-helper.dex
           ls -la dexkit-helper.dex
 
       - uses: actions/upload-artifact@v4
