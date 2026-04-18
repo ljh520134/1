@@ -1,6 +1,5 @@
 package moe.ouom.wekit.dexkit;
 
-import androidx.annotation.NonNull;
 
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
@@ -150,18 +149,17 @@ public class DexMethodDescriptor implements Serializable {
         return declaringClass.substring(1, declaringClass.length() - 1).replace('/', '.');
     }
 
-    @NonNull
-    @Override
+    
     public String toString() {
         return declaringClass + "->" + name + signature;
     }
 
-    @NonNull
+    
     public String getDescriptor() {
         return declaringClass + "->" + name + signature;
     }
 
-    @Override
+    
     public boolean equals(Object o) {
         if (this == o) {
             return true;
